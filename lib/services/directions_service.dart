@@ -11,10 +11,12 @@ class DirectionsService {
 
   Future<Map<String, dynamic>> getRoute(LatLng origin, LatLng destination) async {
     final url = Uri.parse(
-      'https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}?alternatives=true&geometries=geojson&steps=true&access_token=$_mapboxAccessToken',
+
+      'https://api.mapbox.com/directions/v5/mapbox/driving/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}?alternatives=false&geometries=geojson&steps=true&overview=full&access_token=$_mapboxAccessToken',
     );
 
     final response = await http.get(url);
+    print('API Response: ${response.body}');
 
     if (response.statusCode == 200) {
       return json.decode(response.body);
@@ -37,6 +39,7 @@ class DirectionsService {
     );
 
     final response = await http.get(url);
+    print('API Response: ${response.body}');
 
     if (response.statusCode == 200) {
       var decodedResponse = json.decode(response.body);

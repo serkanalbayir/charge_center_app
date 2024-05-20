@@ -1,6 +1,7 @@
 import 'package:animate_do/animate_do.dart';
-import 'package:bitirme/main.dart';
+import 'package:bitirme/main.dart'; // Burada MyApp için olan import
 import 'package:flutter/material.dart';
+import 'signup_page.dart'; // Burada SignUpPage için olan import
 
 void main() => runApp(
     MaterialApp(
@@ -11,7 +12,6 @@ void main() => runApp(
 
 class LoginPage extends StatelessWidget {
 
-
   void _loginAndNavigate(BuildContext context) {
     Navigator.pushReplacement(
       context,
@@ -19,11 +19,7 @@ class LoginPage extends StatelessWidget {
     );
   }
 
-
   @override
-
-
-
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
@@ -50,8 +46,8 @@ class LoginPage extends StatelessWidget {
                   FadeInUp(
                     duration: Duration(milliseconds: 1000),
                     child: Container(
-                      height: 110, // Logo yüksekliğinizi burada ayarlayabilirsiniz.
-                      child: Image.asset('assets/aa.jpg'), // Logo dosya yolu burada kullanılacak.
+                      height: 110,
+                      child: Image.asset('assets/aa.jpg'),
                     ),
                   ),
                 ],
@@ -112,19 +108,20 @@ class LoginPage extends StatelessWidget {
                         ),
                       )),
                       SizedBox(height: 30,),
-                      FadeInUp(duration: Duration(milliseconds: 1500), child: Text("Forgot Password?", style: TextStyle(color: Colors.white),)),
+                      FadeInUp (duration: Duration(milliseconds: 1500), child: Text("Forgot Password?", style: TextStyle(color: Colors.white),)),
                       SizedBox(height: 30,),
                       FadeInUp(duration: Duration(milliseconds: 1600), child: MaterialButton(
-                        onPressed: () {},
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => SignUpPage()),
+                          );
+                        },
                         height: 40,
-                        // margin: EdgeInsets.symmetric(horizontal: 50),
                         color: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(50),
-
                         ),
-                        // decoration: BoxDecoration(
-                        // ),
                         child: Center(
                           child: Text("Sign Up", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),),
                         ),
@@ -135,7 +132,7 @@ class LoginPage extends StatelessWidget {
                           Expanded(
                             child: FadeInUp(duration: Duration(milliseconds: 1800), child: MaterialButton(
                               onPressed: () => _loginAndNavigate(context),
-                              height: 50,
+                              height: 40,
                               color: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(50),
@@ -158,4 +155,3 @@ class LoginPage extends StatelessWidget {
     );
   }
 }
-
