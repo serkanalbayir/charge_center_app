@@ -1,3 +1,4 @@
+import 'package:bitirme/route_elevation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -41,20 +42,20 @@ class _MyAppState extends State<MyApp> {
   List<dynamic> stations = [];
   late LatLng _currentLocation;
   List<LatLng> _routeCoords = [];
+  List<double> _routeSlopes = [];
   final MapController _mapController = MapController();
   final DirectionsService _directionsService = DirectionsService();
   final TextEditingController _destinationController = TextEditingController();
   bool _isNavigating = false; // Navigasyon modunu takip eden değişken
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState> ();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late EstimatedTimeService estimatedTimeService;
 
-
   List<LatLng> stationPoints = [
-  LatLng(41.049294, 29.018036),
-  LatLng(41.042484, 29.032059),];
+    LatLng(41.049294, 29.018036),
+    LatLng(41.042484, 29.032059),
+  ];
   StationService stationService = StationService();
   List<dynamic> nearbyStationsWithDistance = [];
-
 
   void _getNearbyStations() async {
     var stations = await stationService.fetchStations();
@@ -63,7 +64,6 @@ class _MyAppState extends State<MyApp> {
       this.stations = nearbyStations;
     });
   }
-
 
   void _showStationDetails(dynamic station) {
     showModalBottomSheet(
@@ -106,7 +106,6 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-
   void _getNearbyStationsWithDistance() async {
     var stationsWithDistance = await stationService.getNearbyStationsWithDrivingDistance(_currentLocation);
     if (stationsWithDistance.isNotEmpty) {
@@ -118,8 +117,7 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  void _calculateETA( LatLng destination) {
-
+  void _calculateETA(LatLng destination) {
     LatLng origin = _currentLocation;
 
     // estimatedTimeService'ı kullanarak ETA hesaplanır
@@ -134,7 +132,6 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-
   void _onStationTap(LatLng stationPosition) {
     print("Selected station coordinates: ${stationPosition.latitude}, ${stationPosition.longitude}");
     setState(() {
@@ -145,7 +142,6 @@ class _MyAppState extends State<MyApp> {
     // İstasyon konumunu ETA hesaplamak için kullan
     _calculateETA(stationPosition);
   }
-
 
   void _startListeningLocation() {
     final locationSettings = LocationSettings(
@@ -171,8 +167,6 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-
-
   Future<void> _loadAllStations() async {
     var stationService = StationService();
     var stations = await stationService.fetchStations();
@@ -185,7 +179,6 @@ class _MyAppState extends State<MyApp> {
     final response = await rootBundle.loadString('assets/stations.json');
     return jsonDecode(response) as List;
   }
-
 
   List<LatLng> smoothPath(List<LatLng> points) {
     List<LatLng> smoothedPoints = [];
@@ -210,6 +203,15 @@ class _MyAppState extends State<MyApp> {
     return smoothedPoints;
   }
 
+  void _calculateSlopes(LatLng destination) async {
+    LatLng origin = _currentLocation;
+    RouteElevation routeElevation = RouteElevation();
+    List<double> slopes = await routeElevation.getRouteSlopes(origin, destination);
+
+    for (int i = 0; i < slopes.length; i++) {
+      print("Slope at segment $i: ${slopes[i]}");
+    }
+  }
 
   Future<void> _getRoute({LatLng? stationPosition}) async {
     try {
@@ -229,43 +231,46 @@ class _MyAppState extends State<MyApp> {
 
       // API'den rota bilgisi al
       Map<String, dynamic> routeData = await _directionsService.getRoute(start, destination);
-      // print("Raw route data: $routeData");
+      print("Raw route data: $routeData");
       if (routeData['routes'] != null && routeData['routes'].isNotEmpty) {
         // Rota verisinden polyline çözümle
         Map<String, dynamic> geometry = routeData['routes'][0]['geometry'];
-       // print("Geometry: $geometry");
+        print("Geometry: $geometry");
         List<LatLng> routeCoords = _directionsService.parsePolyline(geometry);
         print('Parsed polyline points: $routeCoords');
 
         List<LatLng> smoothedRouteCoords = smoothPath(routeCoords);
 
-
-
         // Polyline koordinatlarını haritada çiz
         setState(() {
           _routeCoords = smoothedRouteCoords;
           _mapController.move(destination, 15);
-
         });
-      }
 
-        if (_isNavigating) {
-          _calculateETA(destination);
+        // Rota boyunca eğim verilerini al
+        RouteElevation routeElevation = RouteElevation();
+        try {
+          List<double> slopes = await routeElevation.getRouteSlopes(start, destination);
+
+          // Eğim verilerini güncelle
+          setState(() {
+            _routeSlopes = slopes;
+          });
+
+          print('Route slopes: $slopes');
+        } catch (e) {
+          print("Elevation error: $e");
         }
-
-
-      // Eğer navigasyon başlatıldıysa, haritayı hedefe odakla
-      if (_isNavigating) {
-        _mapController.move(_currentLocation, 18);
+      } else {
+        print("No route found");
       }
     } catch (e) {
-      print(e);
+      print("Rota alınırken hata: $e");
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Error: $e'),
       ));
     }
   }
-
 
   Future<Position> _determinePosition() async {
     bool serviceEnabled;
@@ -290,9 +295,6 @@ class _MyAppState extends State<MyApp> {
 
     return await Geolocator.getCurrentPosition();
   }
-
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -346,19 +348,19 @@ class _MyAppState extends State<MyApp> {
                         var station = nearbyStationsWithDistance[index];
                         var stationPosition = LatLng(station['latitude'], station['longitude']);
                         return ListTile(
-                          leading: Icon(Icons.electric_car),
-                          title: Text(station['name']),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('${station['distance'].toStringAsFixed(1)} km'),
-                              Text(station['address']),
-                            ],
-                          ),
-                          onTap: () {
-                            _onStationTap(stationPosition);
-                            _showStationDetails(station);
-                          }
+                            leading: Icon(Icons.electric_car),
+                            title: Text(station['name']),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('${station['distance'].toStringAsFixed(1)} km'),
+                                Text(station['address']),
+                              ],
+                            ),
+                            onTap: () {
+                              _onStationTap(stationPosition);
+                              _showStationDetails(station);
+                            }
                         );
                       },
                     ),
@@ -374,7 +376,6 @@ class _MyAppState extends State<MyApp> {
                         );
                       },
                     )
-
                   ],
                 ),
               ),
@@ -514,21 +515,35 @@ class _MyAppState extends State<MyApp> {
                       ],
                     ),
                     child: Text(
-                      'estimated time of arrival: $_estimatedTimeOfArrival',
+                      'Estimated time of arrival: $_estimatedTimeOfArrival',
                       style: TextStyle(
                         fontSize: 16.0,
                         fontWeight: FontWeight.bold,
                       ),
-
-                    )
+                    ),
                   ),
                 ),
               ),
-
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                color: Colors.white,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _routeSlopes.length,
+                  itemBuilder: (context, index) {
+                    return ListTile(
+                      title: Text('Segment ${index + 1}: Slope ${_routeSlopes[index]}'),
+                    );
+                  },
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 }
-
