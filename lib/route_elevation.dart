@@ -2,6 +2,7 @@ import 'package:latlong2/latlong.dart';
 import 'services/directions_service.dart';
 import 'services/elevation_service.dart';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart'; // compute fonksiyonunu kullanmak için
 
 class RouteElevation {
   final DirectionsService _directionsService = DirectionsService();
@@ -19,44 +20,62 @@ class RouteElevation {
     List<LatLng> routeCoords = _directionsService.parsePolyline(routeData['routes'][0]['geometry']);
 
     List<double> slopes = [];
+    List<Future<Map<String, double>>> elevationFutures = [];
 
     for (int i = 0; i < routeCoords.length - 1; i++) {
       LatLng current = routeCoords[i];
       LatLng next = routeCoords[i + 1];
 
-      try {
-        // Yükseklik verilerini al
-        double elevation1 = await _elevationService.getElevation(current.latitude, current.longitude);
-        double elevation2 = await _elevationService.getElevation(next.latitude, next.longitude);
+      elevationFutures.add(_getElevationData(current, next));
+    }
 
-        print('Elevation at current location ${current.latitude}, ${current.longitude}: $elevation1');
-        print('Elevation at next point ${next.latitude}, ${next.longitude}: $elevation2');
+    List<Map<String, double>> elevations = await Future.wait(elevationFutures);
 
-        // Yatay mesafe hesaplama
-        double deltaLat = next.latitude - current.latitude;
-        double deltaLon = next.longitude - current.longitude;
+    for (int i = 0; i < elevations.length; i++) {
+      Map<String, double> elevationData = elevations[i];
 
-        double metersPerDegLat = 111320;
-        double metersPerDegLon = 111320 * math.cos(_radians(current.latitude));
+      double elevation1 = elevationData['elevation1']!;
+      double elevation2 = elevationData['elevation2']!;
+      LatLng current = routeCoords[i];
+      LatLng next = routeCoords[i + 1];
 
-        double deltaLatM = deltaLat * metersPerDegLat;
-        double deltaLonM = deltaLon * metersPerDegLon;
+      // Yatay mesafe hesaplama
+      double deltaLat = next.latitude - current.latitude;
+      double deltaLon = next.longitude - current.longitude;
 
-        double horizontalDistance = math.sqrt(deltaLatM * deltaLatM + deltaLonM * deltaLonM);
+      double metersPerDegLat = 111320;
+      double metersPerDegLon = 111320 * math.cos(_radians(current.latitude));
 
-        // Yükseklik farkı
-        double deltaHeight = elevation1 - elevation2;
+      double deltaLatM = deltaLat * metersPerDegLat;
+      double deltaLonM = deltaLon * metersPerDegLon;
 
-        // Eğim açısını hesapla
-        double slopeAngle = _degrees(math.atan(deltaHeight / horizontalDistance));
-        slopes.add(slopeAngle);
-      } catch (e) {
-        print("Elevation error for segment $i: $e");
-        slopes.add(0.0); // Yükseklik verisi alınamazsa eğimi 0 olarak ayarla
-      }
+      double horizontalDistance = math.sqrt(deltaLatM * deltaLatM + deltaLonM * deltaLonM);
+
+      // Yükseklik farkı
+      double deltaHeight = elevation1 - elevation2;
+
+      // Eğim açısını hesapla
+      double slopeAngle = _degrees(math.atan(deltaHeight / horizontalDistance));
+      slopes.add(slopeAngle);
     }
 
     return slopes;
+  }
+
+  Future<Map<String, double>> _getElevationData(LatLng current, LatLng next) async {
+    try {
+      // Yükseklik verilerini al
+      double elevation1 = await _elevationService.getElevation(current.latitude, current.longitude);
+      double elevation2 = await _elevationService.getElevation(next.latitude, next.longitude);
+
+      print('Elevation at current location ${current.latitude}, ${current.longitude}: $elevation1');
+      print('Elevation at next point ${next.latitude}, ${next.longitude}: $elevation2');
+
+      return {'elevation1': elevation1, 'elevation2': elevation2};
+    } catch (e) {
+      print("Elevation error: $e");
+      return {'elevation1': 0.0, 'elevation2': 0.0}; // Yükseklik verisi alınamazsa 0 olarak ayarla
+    }
   }
 
   double _degrees(double radians) => radians * 180 / math.pi;

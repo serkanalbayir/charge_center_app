@@ -1,4 +1,3 @@
-import 'package:bitirme/route_elevation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -11,7 +10,10 @@ import 'services/station_service.dart';
 import 'services/station_markers.dart';
 import 'dart:convert';
 import 'services/estimatedTime_service.dart';
-
+import 'review_page.dart';
+import 'models/_station.dart';
+import 'widgets/station_details_bottom_sheet.dart';
+import 'filter_page.dart';
 
 void main() => runApp(AppEntry());
 
@@ -35,14 +37,12 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-
-  List<dynamic> _allStations = [];
+  List<Station> _allStations = [];
   String _estimatedTimeOfArrival = '';
   bool _drawerOpen = false;
   List<dynamic> stations = [];
   late LatLng _currentLocation;
   List<LatLng> _routeCoords = [];
-  List<double> _routeSlopes = [];
   final MapController _mapController = MapController();
   final DirectionsService _directionsService = DirectionsService();
   final TextEditingController _destinationController = TextEditingController();
@@ -60,32 +60,77 @@ class _MyAppState extends State<MyApp> {
   void _getNearbyStations() async {
     var stations = await stationService.fetchStations();
     var nearbyStations = stationService.filterNearbyStations(stations, _currentLocation); // 10 km mesafedeki istasyonlar.
+
     setState(() {
       this.stations = nearbyStations;
     });
   }
 
-  void _showStationDetails(dynamic station) {
+  Future<void> showStationDetails(BuildContext context, Station station, Future<void> Function({LatLng? stationPosition}) getRouteFunction, TextEditingController destinationController) async {
     showModalBottomSheet(
-        context: context,
-        builder: (BuildContext bc) {
-          return Container(
-            padding: EdgeInsets.all(16),
+      context: context,
+      builder: (BuildContext context) {
+        return Container(
+          padding: EdgeInsets.all(16),
+          // Height'i kaldırıyoruz çünkü içerik ekrana sığmalı
+          child: SingleChildScrollView( // Scrollable yapısını ekliyoruz
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Text(station['name'], style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                SizedBox(height: 10),
-                Text("Type: ${station['type']}"),
-                Text("Power Output: ${station['power_output']}"),
-                Text("Socket Types: ${station['socket_types'].join(', ')}"),
-                Text("Operating Hours: ${station['operating_hours']}"),
-                Text("Status: ${station['status']}")
+                Text(station.name, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                SizedBox(height: 8), // Araya boşluk ekleme
+                Text("Address: ${station.address}"),
+                SizedBox(height: 8), // Araya boşluk ekleme
+                Text("Type: ${station.type.join(', ')}"), // Listeyi virgülle ayırarak gösterme
+                SizedBox(height: 8), // Araya boşluk ekleme
+                Text("Power Output: ${station.powerOutput}"),
+                SizedBox(height: 8), // Araya boşluk ekleme
+                Text("Socket Types: ${station.socketTypes.join(', ')}"),
+                SizedBox(height: 8), // Araya boşluk ekleme
+                Text("Operating Hours: ${station.operatingHours}"),
+                SizedBox(height: 8), // Araya boşluk ekleme
+                Text("Status: ${station.status}"),
+                SizedBox(height: 16), // Buton için boşluk ekleme
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          print('Route button clicked for station: ${station.name}');
+                          Navigator.pop(context); // BottomSheet'i kapat
+                          destinationController.text = '${station.longitude}, ${station.latitude}'; // Koordinatları destinationController'a atama
+                          await getRouteFunction(stationPosition: LatLng(station.latitude, station.longitude)); // Rota oluştur
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.lightGreen,
+                        ),
+                        child: Text('Route'),
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => MyHomePage()),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                        ),
+                        child: Text('Add Review'),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
-          );
-        }
+          ),
+        );
+      },
     );
   }
 
@@ -93,7 +138,7 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     _loadAllStations();
     super.initState();
-    estimatedTimeService = EstimatedTimeService('pk.eyJ1IjoiYXljYWRpbmRhciIsImEiOiJjbHEwdGFyZmEwMXZsMmpsZnhjOWFya2VqIn0.WerEPzO_rkFSK2PlxfzJtA');
+    estimatedTimeService = EstimatedTimeService('');
     _determinePosition().then((position) {
       setState(() {
         _currentLocation = LatLng(position.latitude, position.longitude);
@@ -108,6 +153,7 @@ class _MyAppState extends State<MyApp> {
 
   void _getNearbyStationsWithDistance() async {
     var stationsWithDistance = await stationService.getNearbyStationsWithDrivingDistance(_currentLocation);
+
     if (stationsWithDistance.isNotEmpty) {
       setState(() {
         nearbyStationsWithDistance = stationsWithDistance;
@@ -137,11 +183,13 @@ class _MyAppState extends State<MyApp> {
     setState(() {
       _destinationController.text = '${stationPosition.longitude}, ${stationPosition.latitude}';
       _getRoute(stationPosition: stationPosition); // Rota çizmek için _getRoute fonksiyonunu güncellenmiş haliyle çağırır
+
     });
 
     // İstasyon konumunu ETA hesaplamak için kullan
     _calculateETA(stationPosition);
   }
+
 
   void _startListeningLocation() {
     final locationSettings = LocationSettings(
@@ -171,7 +219,7 @@ class _MyAppState extends State<MyApp> {
     var stationService = StationService();
     var stations = await stationService.fetchStations();
     setState(() {
-      _allStations = stations;
+      _allStations = stations.map((station) => Station.fromJson(station)).toList();
     });
   }
 
@@ -203,15 +251,6 @@ class _MyAppState extends State<MyApp> {
     return smoothedPoints;
   }
 
-  void _calculateSlopes(LatLng destination) async {
-    LatLng origin = _currentLocation;
-    RouteElevation routeElevation = RouteElevation();
-    List<double> slopes = await routeElevation.getRouteSlopes(origin, destination);
-
-    for (int i = 0; i < slopes.length; i++) {
-      print("Slope at segment $i: ${slopes[i]}");
-    }
-  }
 
   Future<void> _getRoute({LatLng? stationPosition}) async {
     try {
@@ -244,25 +283,11 @@ class _MyAppState extends State<MyApp> {
         // Polyline koordinatlarını haritada çiz
         setState(() {
           _routeCoords = smoothedRouteCoords;
-          _mapController.move(destination, 15);
+          _mapController.move(_currentLocation, 16);
         });
 
         // Rota boyunca eğim verilerini al
-        RouteElevation routeElevation = RouteElevation();
-        try {
-          List<double> slopes = await routeElevation.getRouteSlopes(start, destination);
-
-          // Eğim verilerini güncelle
-          setState(() {
-            _routeSlopes = slopes;
-          });
-
-          print('Route slopes: $slopes');
-        } catch (e) {
-          print("Elevation error: $e");
-        }
-      } else {
-        print("No route found");
+        // Eğim verilerini güncelle
       }
     } catch (e) {
       print("Rota alınırken hata: $e");
@@ -296,6 +321,71 @@ class _MyAppState extends State<MyApp> {
     return await Geolocator.getCurrentPosition();
   }
 
+  Future<void> _showStationDetails(BuildContext context, Station station, Future<void> Function({LatLng? stationPosition}) getRouteFunction, TextEditingController destinationController) async {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return Container(
+          padding: EdgeInsets.all(16),
+          // Height'i kaldırıyoruz çünkü içerik ekrana sığmalı
+          child: SingleChildScrollView( // Scrollable yapısını ekliyoruz
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(station.name, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                SizedBox(height: 8), // Araya boşluk ekleme
+                Text("Address: ${station.address}"),
+                SizedBox(height: 8), // Araya boşluk ekleme
+                Text("Type: ${station.type.join(', ')}"), // Listeyi virgülle ayırarak gösterme
+                SizedBox(height: 8), // Araya boşluk ekleme
+                Text("Power Output: ${station.powerOutput}"),
+                SizedBox(height: 8), // Araya boşluk ekleme
+                Text("Socket Types: ${station.socketTypes.join(', ')}"),
+                SizedBox(height: 8), // Araya boşluk ekleme
+                Text("Operating Hours: ${station.operatingHours}"),
+                SizedBox(height: 8), // Araya boşluk ekleme
+                Text("Status: ${station.status}"),
+                SizedBox(height: 16), // Buton için boşluk ekleme
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          print('Route button clicked for station: ${station.name}');
+                          Navigator.pop(context); // BottomSheet'i kapat
+                          destinationController.text = '${station.longitude}, ${station.latitude}'; // Koordinatları destinationController'a atama
+                          await getRouteFunction(stationPosition: LatLng(station.latitude, station.longitude)); // Rota oluştur
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.lightGreen,
+                        ),
+                        child: Text('Route'),
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          print('Add Review button clicked for station: ${station.name}');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                        ),
+                        child: Text('Add Review'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // DefaultTabController ile Drawer'ı sarmalayın.
@@ -314,6 +404,18 @@ class _MyAppState extends State<MyApp> {
           ),
           backgroundColor: Colors.green,
           automaticallyImplyLeading: false,
+          actions: [
+            IconButton(
+              icon: Icon(Icons.filter_list),
+              color: Colors.white,
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => HomePage()),
+                );
+              },
+            )
+          ],
         ),
         drawer: Drawer(
           child: Column(
@@ -357,10 +459,14 @@ class _MyAppState extends State<MyApp> {
                                 Text(station['address']),
                               ],
                             ),
-                            onTap: () {
-                              _onStationTap(stationPosition);
-                              _showStationDetails(station);
-                            }
+                          onTap: () {
+                            showStationDetails(
+                              context,
+                              Station.fromJson(station),
+                              _getRoute,
+                              _destinationController,
+                            ); // `showStationDetails` fonksiyonunu çağır
+                          },
                         );
                       },
                     ),
@@ -370,9 +476,9 @@ class _MyAppState extends State<MyApp> {
                         var station = _allStations[index];
                         return ListTile(
                           leading: Icon(Icons.electric_car),
-                          title: Text(station['name']),
-                          subtitle: Text('${station['address']}'),
-                          onTap: () => _showStationDetails(station),
+                          title: Text(station.name),
+                          subtitle: Text(station.address),
+                          onTap: () => showStationDetails(context, station, _getRoute, _destinationController), // `showStationDetails` fonksiyonunu çağır
                         );
                       },
                     )
@@ -392,9 +498,9 @@ class _MyAppState extends State<MyApp> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://api.mapbox.com/styles/v1/aycadindar/clte7lvwx00mb01qng59z2cig/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiYXljYWRpbmRhciIsImEiOiJjbHEwdGFyZmEwMXZsMmpsZnhjOWFya2VqIn0.WerEPzO_rkFSK2PlxfzJtA',
+                  urlTemplate: 'https://api.mapbox.com/styles/v1/aycadindar/clte7lvwx00mb01qng59z2cig/tiles/256/{z}/{x}/{y}@2x?access_token=',
                   additionalOptions: {
-                    'accessToken': 'pk.eyJ1IjoiYXljYWRpbmRhciIsImEiOiJjbHEwdGFyZmEwMXZsMmpsZnhjOWFya2VqIn0.WerEPzO_rkFSK2PlxfzJtA',
+                    'accessToken': '',
                     'id': 'mapbox.mapbox-streets-v8',
                   },
                 ),
@@ -405,12 +511,19 @@ class _MyAppState extends State<MyApp> {
                       height: 80.0,
                       point: _currentLocation,
                       child: Container(
-                        child: Icon(Icons.location_on, color: Colors.red,),
+                        child: Icon(
+                          Icons.location_on,
+                          size: 50,
+                          color: Colors.red,),
                       ),
                     ),
                   ],
                 ),
-                StationMarkers(),
+                StationMarkers(
+                  stations: _allStations,
+                  onMarkerTap: (station) => showStationDetails(context, station, _getRoute, _destinationController),
+                ),
+
                 PolylineLayer(
                   polylines: [
                     Polyline(
@@ -466,6 +579,8 @@ class _MyAppState extends State<MyApp> {
                         return;
                       }
                       // Hedef girilmişse, hedef konumu al ve rota ile ETA hesapla
+                      _mapController.move(_currentLocation, 16);
+
                       _directionsService.getCoordinatesFromAddress(_destinationController.text).then((destination) {
                         _getRoute(stationPosition: destination);
                         _calculateETA(destination);
@@ -524,23 +639,6 @@ class _MyAppState extends State<MyApp> {
                   ),
                 ),
               ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                color: Colors.white,
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _routeSlopes.length,
-                  itemBuilder: (context, index) {
-                    return ListTile(
-                      title: Text('Segment ${index + 1}: Slope ${_routeSlopes[index]}'),
-                    );
-                  },
-                ),
-              ),
-            ),
           ],
         ),
       ),

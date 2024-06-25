@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 class DirectionsService {
-  static const String _mapboxAccessToken = 'pk.eyJ1IjoiYXljYWRpbmRhciIsImEiOiJjbHEwdGFyZmEwMXZsMmpsZnhjOWFya2VqIn0.WerEPzO_rkFSK2PlxfzJtA';
+  static const String _mapboxAccessToken = '';
 
   Future<Map<String, dynamic>> getRoute(LatLng origin, LatLng destination) async {
     final url = Uri.parse(

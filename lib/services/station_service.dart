@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 
 class StationService {
   static const double maxDistance = 8000; // 8 km yarıçap
-  final String _mapboxAccessToken = 'pk.eyJ1IjoiYXljYWRpbmRhciIsImEiOiJjbHEwdGFyZmEwMXZsMmpsZnhjOWFya2VqIn0.WerEPzO_rkFSK2PlxfzJtA'; // Mapbox Access Token'inizi buraya girin
+  final String _mapboxAccessToken = ''; // Mapbox Access Token'inizi buraya girin
 
   Future<List<dynamic>> fetchStations() async {
     final response = await rootBundle.loadString('assets/stations.json');
